@@ -1402,7 +1402,7 @@ datos <- mtcars
 datos$am <- factor ( datos$am )
 
 # Ajustar modelo usando validación cruzada de 5 pliegues .
-modelo <- train ( am ~ wt , data = datos , method = "glm",
+modelo <- train ( am ~ wt , data = entrenamiento , method = "glm",
                   family = binomial ( link = "logit") ,
                   trControl = trainControl ( method = "cv", number = 5 ,
                                              savePredictions = TRUE ) )
@@ -1487,6 +1487,87 @@ cat ("\n\n")
 cat (" Likelihood Ratio Test para los modelos \n")
 cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - -\n")
 print ( anova ( modelo_peso , mejor , test = "LRT") )
+
+# Independencia de los residuos .
+cat (" Verificación de independencia de los residuos \n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - -\n")
+print ( durbinWatsonTest ( modelo_peso , max.lag = 5) )
+
+# Detectar posibles valores atípicos .
+cat (" Identificación de posibles valores atípicos \n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - -\n")
+plot ( mejor )
+
+# Obtener los residuos y las estadísticas .
+output <- data.frame ( predicted.probabilities = fitted ( modelo_peso ) )
+output [["standardized.residuals"]] <- rstandard ( modelo_peso )
+output [["studentized.residuals"]] <- rstudent ( modelo_peso )
+output [["cooks.distance"]] <- cooks.distance ( modelo_peso )
+output [["dfbeta"]] <- dfbeta ( modelo_peso )
+output [["dffit"]] <- dffits ( modelo_peso )
+output [["leverage"]] <- hatvalues ( modelo_peso )
+
+# Evaluar residuos estandarizados que escapen a la normalidad .
+# 95 % de los residuos estandarizados deber ían estar entre
+# -1.96 y 1.96 , y 99 % entre -2.58 y 2.58.
+sospechosos1 <- which ( abs( output [["standardized.residuals"]]) > 1.96)
+sospechosos1 <- sort ( sospechosos1 )
+cat ("\n\n")
+cat (" Residuos estandarizados fuera del 95 % esperado \n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - - - - - - - - -\n")
+print ( rownames ( entrenamiento [ sospechosos1 , ]) )
+
+# Revisar casos con distancia de Cook mayor a uno .
+sospechosos2 <- which ( output [["cooks.distance"]] > 1)
+sospechosos2 <- sort ( sospechosos2 )
+cat ("\n\n")
+cat (" Residuales con una distancia de Cook alta \n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - - - - -\n")
+print ( rownames ( entrenamiento [ sospechosos2 , ]) )
+
+# Revisar casos cuyo apalancamiento sea más del doble
+# o triple del apalancamiento promedio .
+leverage.promedio <- ncol ( entrenamiento ) / nrow ( datos )
+sospechosos3 <- which ( output [["leverage"]] > leverage.promedio )
+sospechosos3 <- sort ( sospechosos3 )
+cat ("\n\n")
+
+cat (" Residuales con levarage fuera de rango ( > ")
+cat ( round ( leverage.promedio , 3) , ")", "\n", sep = "")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - - - - -- - - - - -\n")
+print ( rownames ( entrenamiento [ sospechosos3 , ]) )
+
+# Revisar casos con DFBeta >= 1.
+sospechosos4 <- which ( apply ( output [["dfbeta"]] >= 1 , 1 , any) )
+sospechosos4 <- sort ( sospechosos4 )
+names ( sospechosos4 ) <- NULL
+cat ("\n\n")
+cat (" Residuales con DFBeta sobre 1\n")
+cat (" - - - - - - - - - - -- - - - - - - - - - - - - - - - - -\n")
+print ( rownames ( entrenamiento [ sospechosos4 , ]) )
+
+# Detalle de las observaciones posiblemente atí picas .
+sospechosos <- c( sospechosos1 , sospechosos2 , sospechosos3 , sospechosos4 )
+sospechosos <- sort ( unique ( sospechosos ) )
+cat ("\n\n")
+cat (" Casos sospechosos \n")
+cat (" - - - - - - - - - - -- - - - - -\n")
+print ( entrenamiento [ sospechosos , ])
+cat ("\n\n")
+print ( output [ sospechosos , ])
+
+#-------------------------------------------------------------------------------
+# MODO EJERCICIO
+# Se elimina la observación "Maserati Bora" del conjunto de entrenamiento, y se
+# re-hace el modelo logistico peso
+entrenamiento <- entrenamiento[-7,]
+modelo_peso <- glm( am ~ wt , family = binomial ( link = "logit") ,
+                    data = entrenamiento )
+
+print ( summary ( modelo_peso ) )
+
+# Se evalúa nuevamente el modelo_peso, pero sin considerar la observación
+# "Maserati Bora":
 
 # Independencia de los residuos .
 cat (" Verificación de independencia de los residuos \n")
